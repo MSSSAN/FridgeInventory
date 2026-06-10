@@ -6,12 +6,50 @@
 
 ---
 
+
+## 서비스 아키텍처
+
+```mermaid
+flowchart TD
+    A[iOS App / SwiftUI] --> B[냉장고 사진 선택]
+    B --> C[Presigned URL 요청]
+    C --> D[API Gateway]
+    D --> E[AWS Lambda]
+
+    E --> F[S3 Presigned URL 생성]
+    F --> A
+
+    A --> G[S3에 원본 이미지 업로드]
+    G --> H[AWS S3]
+
+    A --> I[이미지 key와 분석 요청 전송]
+    I --> D
+    D --> J[AI 처리 Lambda]
+
+    J --> K[S3에서 원본 이미지 가져오기]
+    J --> L[AI 프롬프트 생성]
+    L --> M[Multimodal AI API]
+
+    M --> N[식음료 인벤토리 JSON 반환]
+    N --> J
+    J --> O[DynamoDB에 기록 저장]
+    J --> A
+
+    A --> P[JSON 파싱]
+    P --> Q[Bounding Box 기반 썸네일 크롭]
+    Q --> R[카테고리별 인벤토리 UI 표시]
+```
+
+
+
+
+
+
 ## 1. 시연 연상
 
 ### 1-1) 웹캠을 통한 실시간 PPE 탐지 시연
 
 
-https://github.com/user-attachments/assets/10118e08-5901-4ba4-903f-97f08354e21f
 
 
 
