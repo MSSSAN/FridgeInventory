@@ -1,0 +1,188 @@
+Click "Next" → Name: ChatAppPermissions → "Create policy"
+Step 5: Create New Lambda for Presigned URLs
+This Lambda generates secure upload URLs for iOS app.
+Go to Lambda → Create function
+Configure:
+Function name: generate-upload-url
+Runtime: Node.js 20.x
+Architecture: arm64
+Click "Create function"
+Add same IAM permissions (S3 access) as Step 4
+Step 6: Add API Gateway Endpoint for Upload URL
+Go to API Gateway → Your API
+Create new resource:
+Click "Actions" → "Create Resource"
+Resource name: upload-url
+Resource path: /upload-url
+Click "Create Resource"
+Add GET method:
+Select /upload-url
+Click "Actions" → "Create Method" → GET
+Integration type: Lambda Function
+Lambda Proxy integration: ✅ Check
+Lambda Function: generate-upload-url
+Click "Save"
+Enable CORS:
+Select /upload-url
+Actions → Enable CORS → Enable
+Deploy API:
+Actions → Deploy API → Stage: prod
+Phase 2: Backend Scripts
+Script 1: generate-upload-url Lambda
+This generates presigned URLs for iOS to upload images directly to S3.
+javascript
+import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
+import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
+const s3Client = new S3Client({ region: "ap-southeast-1" });  // Your region
+const BUCKET_NAME = "your-app-chat-images";  // Your bucket name
+export const handler = async (event) => {
+    const headers = {
+        "Access-Control-Allow-Origin": "*",
+        "Access-Control-Allow-Headers": "Content-Type",
+        "Content-Type": "application/json"
+    };
+    // Handle CORS preflight
+    if (event.httpMethod === "OPTIONS") {
+        return { statusCode: 200, headers, body: "" };
+    }
+    try {
+        // Generate unique filename
+        const timestamp = Date.now();
+        const randomId = Math.random().toString(36).substring(2, 8);
+        const imageKey = `uploads/${timestamp}-${randomId}.jpg`;
+        // Create presigned URL (valid for 5 minutes)
+        const command = new PutObjectCommand({
+            Bucket: BUCKET_NAME,
+            Key: imageKey,
+            ContentType: "image/jpeg"
+        });
+        const uploadUrl = await getSignedUrl(s3Client, command, { expiresIn: 300 });
+        return {
+            statusCode: 200,
+            headers,
+            body: JSON.stringify({
+                uploadUrl: uploadUrl,    // iOS uploads to this URL
+                imageKey: imageKey       // iOS sends this key to chat Lambda
+            })
+        };
+    } catch (error) {
+        console.error("Error generating presigned URL:", error);
+        return {
+            statusCode: 500,
+            headers,
+            body: JSON.stringify({ error: error.message })
+        };
+    }
+};
+Important: This Lambda needs the S3 SDK. See Step 7 below.
+Script 2: Updated Chat Lambda (gemini-chat-backend)
+This is your main chat Lambda, now with DynamoDB history.
+javascript
+import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
+import { DynamoDBDocumentClient, PutCommand, QueryCommand } from "@aws-sdk/lib-dynamodb";
+import { S3Client, GetObjectCommand } from "@aws-sdk/client-s3";
+// Initialize clients
+const dynamoClient = new DynamoDBClient({ region: "ap-southeast-1" });
+const docClient = DynamoDBDocumentClient.from(dynamoClient);
+const s3Client = new S3Client({ region: "ap-southeast-1" });
+const TABLE_NAME = "ChatHistory";
+const BUCKET_NAME = "your-app-chat-images";
+const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
+const OPENAI_API_URL = "https://api.openai.com/v1/chat/completions";
+export const handler = async (event) => {
+    const headers = {
+        "Access-Control-Allow-Origin": "*",
+        "Access-Control-Allow-Headers": "Content-Type",
+        "Access-Control-Allow-Methods": "POST, OPTIONS",
+        "Content-Type": "application/json"
+    };
+    // Handle CORS preflight
+    if (event.httpMethod === "OPTIONS") {
+        return { statusCode: 200, headers, body: "" };
+    }
+    try {
+        const body = JSON.parse(event.body);
+        const { sessionId, userText, imageKeys } = body;  // imageKeys is array of S3 keys
+        const currentTimestamp = Date.now();
+        // --- STEP 1: FETCH HISTORY FROM DYNAMODB ---
+        const historyCommand = new QueryCommand({
+            TableName: TABLE_NAME,
+            KeyConditionExpression: "sessionId = :s",
+            ExpressionAttributeValues: { ":s": sessionId },
+            Limit: 20,  // Last 20 messages
+            ScanIndexForward: true  // Oldest → Newest
+        });
+        const historyResult = await docClient.send(historyCommand);
+        // Convert DynamoDB history to OpenAI format
+        const previousMessages = historyResult.Items.map(item => ({
+            role: item.role,
+            content: item.content
+        }));
+        // --- STEP 2: BUILD CURRENT MESSAGE ---
+        let currentContent = [];
+        // Add text if provided
+        if (userText) {
+            currentContent.push({ type: "text", text: userText });
+        }
+        // Add images from S3 if provided
+        if (imageKeys && imageKeys.length > 0) {
+            for (const imageKey of imageKeys) {
+                // Download image from S3
+                const getCommand = new GetObjectCommand({
+                    Bucket: BUCKET_NAME,
+                    Key: imageKey
+                });
+                const s3Response = await s3Client.send(getCommand);
+                const imageBuffer = await streamToBuffer(s3Response.Body);
+                const base64Image = imageBuffer.toString("base64");
+                currentContent.push({
+                    type: "image_url",
+                    image_url: {
+                        url: `data:image/jpeg;base64,${base64Image}`
+                    }
+                });
+            }
+        }
+        // Build current user message
+        const currentUserMessage = {
+            role: "user",
+            content: currentContent.length === 1 && currentContent[0].type === "text"
+                ? currentContent[0].text  // Text only: send as string
+                : currentContent           // With images: send as array
+        };
+        // Combine history + current message
+        const allMessages = [...previousMessages, currentUserMessage];
+        // --- STEP 3: SAVE USER MESSAGE TO DYNAMODB ---
+        await docClient.send(new PutCommand({
+            TableName: TABLE_NAME,
+            Item: {
+                sessionId: sessionId,
+                timestamp: currentTimestamp,
+                role: "user",
+                content: userText || "[Image]",
+                imageKeys: imageKeys || []
+            }
+        }));
+        // --- STEP 4: CALL OPENAI API ---
+        const openaiResponse = await fetch(OPENAI_API_URL, {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+                "Authorization": `Bearer ${OPENAI_API_KEY}`
+            },
+            body: JSON.stringify({
+                model: "gpt-4o-mini",
+                messages: allMessages,
+                max_tokens: 4096
+            })
+        });
+        const openaiData = await openaiResponse.json();
+        if (!openaiResponse.ok) {
+            throw new Error(openaiData.error?.message || "OpenAI API error");
+        }
+        const aiResponseText = openaiData.choices[0].message.content;
+        // --- STEP 5: SAVE AI RESPONSE TO DYNAMODB ---
+        await docClient.send(new PutCommand({
+            TableName: TABLE_NAME,
+            Item: {
+                sessionId: sessionId,

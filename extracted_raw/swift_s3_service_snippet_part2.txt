@@ -1,0 +1,69 @@
+        // Parse response
+        let geminiResponse = try JSONDecoder().decode(GeminiResponse.self, from: data)
+        guard let firstCandidate = geminiResponse.candidates.first,
+              let firstPart = firstCandidate.content.parts.first,
+              let text = firstPart.text else {
+            throw URLError(.cannotDecodeContentData)
+        }
+        return text
+    }
+    // Health check (optional - can remove if not needed)
+    static func checkHealth() async -> Bool {
+        // Since Lambda doesn't sleep, we can just return true
+        // Or remove health check entirely from ViewModel
+        return true
+    }
+}
+Step 5: Update ChatViewModel
+Find ChatViewModel class, update sendMessage method (around line 438):
+swift
+func sendMessage(text: String, images: [UIImage]) {
+    let trimmedText = text.trimmingCharacters(in: .whitespacesAndNewlines)
+    // Require either text or images
+    guard !trimmedText.isEmpty || !images.isEmpty else {
+        return
+    }
+    isLoading = true
+    // Create user message
+    let userMessage = Message(
+        id: UUID(),
+        content: trimmedText.isEmpty ? "[Image]" : trimmedText,
+        isUser: true,
+        timestamp: Date(),
+        image: images.first  // Store first image for display
+    )
+    messages.append(userMessage)
+    Task {
+        do {
+            // Send to backend (handles S3 upload internally)
+            let responseText = try await service.sendMessage(
+                text: trimmedText,
+                images: images,
+                conversationHistory: messages
+            )
+            await MainActor.run {
+                let aiMessage = Message(
+                    id: UUID(),
+                    content: responseText,
+                    isUser: false,
+                    timestamp: Date()
+                )
+                messages.append(aiMessage)
+                isLoading = false
+            }
+        } catch {
+            await MainActor.run {
+                errorMessage = error.localizedDescription
+                showError = true
+                isLoading = false
+            }
+        }
+    }
+}
+Step 6: Remove Health Check (Optional)
+In ContentView, find .onAppear (around line 314):
+swift
+.onAppear {
+    // viewModel.checkServerHealth()  // Comment out - not needed with Lambda
+}
+Or in ChatViewModel, simplify:

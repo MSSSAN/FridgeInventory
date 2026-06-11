@@ -1,0 +1,135 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1800" height="1080" viewBox="0 0 1800 1080">
+  <defs>
+    <marker id="arrow" markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto" markerUnits="strokeWidth">
+      <path d="M2,2 L10,6 L2,10 Z" fill="#475569" />
+    </marker>
+    <filter id="shadow" x="-15%" y="-15%" width="130%" height="130%">
+      <feDropShadow dx="0" dy="4" stdDeviation="4" flood-color="#000000" flood-opacity="0.10"/>
+    </filter>
+    <style>
+      text { font-family: NanumGothic, Apple SD Gothic Neo, Noto Sans CJK KR, sans-serif; }
+      .node rect { filter: url(#shadow); }
+      .section-title { font-size: 22px; font-weight: 800; fill: #1F2937; }
+      .section-label { font-size: 18px; font-weight: 700; fill: #334155; }
+      .legend { font-size: 15px; font-weight: 600; fill: #475569; }
+    </style>
+  </defs>
+  <rect width="100%" height="100%" fill="#FFFFFF"/>
+  <text x="900" y="55" text-anchor="middle" font-size="34" font-weight="900" fill="#111827">냉장고 식음료 정보 정리 서비스 아키텍처</text>
+  <text x="900" y="88" text-anchor="middle" font-size="17" font-weight="600" fill="#64748B">Fridge Photo Upload → AI Inventory Analysis → App-side Thumbnail &amp; Inventory UI</text>
+
+  <rect x="45" y="110" width="1710" height="245" rx="24" fill="#F8FAFC" stroke="#E2E8F0" stroke-width="2"/>
+  <text x="75" y="142" class="section-title">1. 이미지 업로드 URL 발급</text>
+
+  <rect x="45" y="382" width="1710" height="250" rx="24" fill="#F8FAFC" stroke="#E2E8F0" stroke-width="2"/>
+  <text x="75" y="414" class="section-title">2. 원본 이미지 저장 및 AI 분석 요청</text>
+
+  <rect x="45" y="660" width="1710" height="355" rx="24" fill="#F8FAFC" stroke="#E2E8F0" stroke-width="2"/>
+  <text x="75" y="692" class="section-title">3. AI 분석 결과 처리 및 인벤토리 UI 생성</text>
+
+    <g class="node" id="A">
+      <rect x="80" y="180" width="220" height="68" rx="18" fill="#EEF6FF" stroke="#60A5FA" stroke-width="2"/>
+      
+      <text x="190.0" y="219.0" text-anchor="middle" font-size="19" font-weight="600" fill="#111827"><tspan x="190.0" dy="0">iOS App / SwiftUI</tspan></text>
+    </g>
+    <g class="node" id="B">
+      <rect x="360" y="180" width="220" height="68" rx="18" fill="#EEF6FF" stroke="#60A5FA" stroke-width="2"/>
+      
+      <text x="470.0" y="219.0" text-anchor="middle" font-size="19" font-weight="600" fill="#111827"><tspan x="470.0" dy="0">냉장고 사진 선택</tspan></text>
+    </g>
+    <g class="node" id="C">
+      <rect x="640" y="180" width="230" height="68" rx="18" fill="#EEF6FF" stroke="#60A5FA" stroke-width="2"/>
+      
+      <text x="755.0" y="219.0" text-anchor="middle" font-size="19" font-weight="600" fill="#111827"><tspan x="755.0" dy="0">Presigned URL 요청</tspan></text>
+    </g>
+    <g class="node" id="D">
+      <rect x="930" y="180" width="210" height="68" rx="18" fill="#F5F3FF" stroke="#A78BFA" stroke-width="2"/>
+      
+      <text x="1035.0" y="219.0" text-anchor="middle" font-size="19" font-weight="600" fill="#111827"><tspan x="1035.0" dy="0">API Gateway</tspan></text>
+    </g>
+    <g class="node" id="E">
+      <rect x="1200" y="180" width="210" height="68" rx="18" fill="#FFF7ED" stroke="#FB923C" stroke-width="2"/>
+      
+      <text x="1305.0" y="219.0" text-anchor="middle" font-size="19" font-weight="600" fill="#111827"><tspan x="1305.0" dy="0">AWS Lambda</tspan></text>
+    </g>
+    <g class="node" id="F">
+      <rect x="1460" y="180" width="240" height="68" rx="18" fill="#FFF7ED" stroke="#FB923C" stroke-width="2"/>
+      
+      <text x="1580.0" y="208.0" text-anchor="middle" font-size="19" font-weight="600" fill="#111827"><tspan x="1580.0" dy="0">S3 Presigned URL</tspan><tspan x="1580.0" dy="22">생성</tspan></text>
+    </g>
+    <g class="node" id="G">
+      <rect x="80" y="470" width="245" height="68" rx="18" fill="#EEF6FF" stroke="#60A5FA" stroke-width="2"/>
+      
+      <text x="202.5" y="498.0" text-anchor="middle" font-size="19" font-weight="600" fill="#111827"><tspan x="202.5" dy="0">S3에 원본 이미지</tspan><tspan x="202.5" dy="22">업로드</tspan></text>
+    </g>
+    <g class="node" id="H">
+      <rect x="400" y="470" width="200" height="68" rx="18" fill="#ECFDF5" stroke="#34D399" stroke-width="2"/>
+      
+      <text x="500.0" y="509.0" text-anchor="middle" font-size="19" font-weight="600" fill="#111827"><tspan x="500.0" dy="0">AWS S3</tspan></text>
+    </g>
+    <g class="node" id="I">
+      <rect x="700" y="470" width="285" height="68" rx="18" fill="#EEF6FF" stroke="#60A5FA" stroke-width="2"/>
+      
+      <text x="842.5" y="498.0" text-anchor="middle" font-size="19" font-weight="600" fill="#111827"><tspan x="842.5" dy="0">이미지 key와 분석</tspan><tspan x="842.5" dy="22">요청 전송</tspan></text>
+    </g>
+    <g class="node" id="D2">
+      <rect x="1060" y="470" width="210" height="68" rx="18" fill="#F5F3FF" stroke="#A78BFA" stroke-width="2"/>
+      
+      <text x="1165.0" y="509.0" text-anchor="middle" font-size="19" font-weight="600" fill="#111827"><tspan x="1165.0" dy="0">API Gateway</tspan></text>
+    </g>
+    <g class="node" id="J">
+      <rect x="1340" y="470" width="245" height="68" rx="18" fill="#FFF7ED" stroke="#FB923C" stroke-width="2"/>
+      
+      <text x="1462.5" y="509.0" text-anchor="middle" font-size="19" font-weight="600" fill="#111827"><tspan x="1462.5" dy="0">AI 처리 Lambda</tspan></text>
+    </g>
+    <g class="node" id="K">
+      <rect x="80" y="755" width="285" height="68" rx="18" fill="#ECFDF5" stroke="#34D399" stroke-width="2"/>
+      
+      <text x="222.5" y="783.0" text-anchor="middle" font-size="19" font-weight="600" fill="#111827"><tspan x="222.5" dy="0">S3에서 원본 이미지</tspan><tspan x="222.5" dy="22">가져오기</tspan></text>
+    </g>
+    <g class="node" id="L">
+      <rect x="430" y="755" width="230" height="68" rx="18" fill="#FFF7ED" stroke="#FB923C" stroke-width="2"/>
+      
+      <text x="545.0" y="794.0" text-anchor="middle" font-size="19" font-weight="600" fill="#111827"><tspan x="545.0" dy="0">AI 프롬프트 생성</tspan></text>
+    </g>
+    <g class="node" id="M">
+      <rect x="720" y="755" width="245" height="68" rx="18" fill="#FEF2F2" stroke="#F87171" stroke-width="2"/>
+      
+      <text x="842.5" y="794.0" text-anchor="middle" font-size="19" font-weight="600" fill="#111827"><tspan x="842.5" dy="0">Multimodal AI API</tspan></text>
+    </g>
+    <g class="node" id="N">
+      <rect x="1025" y="755" width="285" height="68" rx="18" fill="#FEF2F2" stroke="#F87171" stroke-width="2"/>
+      
+      <text x="1167.5" y="783.0" text-anchor="middle" font-size="19" font-weight="600" fill="#111827"><tspan x="1167.5" dy="0">식음료 인벤토리</tspan><tspan x="1167.5" dy="22">JSON 반환</tspan></text>
+    </g>
+    <g class="node" id="O">
+      <rect x="1380" y="755" width="275" height="68" rx="18" fill="#ECFDF5" stroke="#34D399" stroke-width="2"/>
+      
+      <text x="1517.5" y="794.0" text-anchor="middle" font-size="19" font-weight="600" fill="#111827"><tspan x="1517.5" dy="0">DynamoDB에 기록 저장</tspan></text>
+    </g>
+    <g class="node" id="P">
+      <rect x="80" y="905" width="200" height="68" rx="18" fill="#EEF6FF" stroke="#60A5FA" stroke-width="2"/>
+      
+      <text x="180.0" y="944.0" text-anchor="middle" font-size="19" font-weight="600" fill="#111827"><tspan x="180.0" dy="0">JSON 파싱</tspan></text>
+    </g>
+    <g class="node" id="Q">
+      <rect x="370" y="905" width="270" height="68" rx="18" fill="#EEF6FF" stroke="#60A5FA" stroke-width="2"/>
+      
+      <text x="505.0" y="933.0" text-anchor="middle" font-size="19" font-weight="600" fill="#111827"><tspan x="505.0" dy="0">Bounding Box 기반</tspan><tspan x="505.0" dy="22">썸네일 크롭</tspan></text>
+    </g>
+    <g class="node" id="R">
+      <rect x="730" y="905" width="295" height="68" rx="18" fill="#EEF6FF" stroke="#60A5FA" stroke-width="2"/>
+      
+      <text x="877.5" y="933.0" text-anchor="middle" font-size="19" font-weight="600" fill="#111827"><tspan x="877.5" dy="0">카테고리별 인벤토리</tspan><tspan x="877.5" dy="22">UI 표시</tspan></text>
+    </g><path d="M 300 214.0 L 360 214.0" fill="none" stroke="#475569" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/><path d="M 580 214.0 L 640 214.0" fill="none" stroke="#475569" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/><path d="M 870 214.0 L 930 214.0" fill="none" stroke="#475569" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/><path d="M 1140 214.0 L 1200 214.0" fill="none" stroke="#475569" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/><path d="M 1410 214.0 L 1460 214.0" fill="none" stroke="#475569" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/><path d="M 1580.0 180 L 1580 130 L 190 130 L 190.0 180" fill="none" stroke="#475569" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)" stroke-dasharray="8 8"/><text x="885.0" y="120.0" text-anchor="middle" font-size="15" font-weight="600" fill="#475569" class="edge-label">업로드 URL 반환</text><path d="M 190.0 248 L 190 360 L 202 360 L 202.5 470" fill="none" stroke="#475569" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/><text x="196.0" y="350.0" text-anchor="middle" font-size="15" font-weight="600" fill="#475569" class="edge-label">원본 이미지</text><path d="M 325 504.0 L 400 504.0" fill="none" stroke="#475569" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/><path d="M 190.0 248 L 190 410 L 842 410 L 842.5 470" fill="none" stroke="#475569" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/><text x="516.0" y="400.0" text-anchor="middle" font-size="15" font-weight="600" fill="#475569" class="edge-label">image key</text><path d="M 985 504.0 L 1060 504.0" fill="none" stroke="#475569" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/><path d="M 1270 504.0 L 1340 504.0" fill="none" stroke="#475569" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/><path d="M 1462.5 538 L 1462 650 L 222 650 L 222.5 755" fill="none" stroke="#475569" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/><text x="842.0" y="640.0" text-anchor="middle" font-size="15" font-weight="600" fill="#475569" class="edge-label">이미지 조회</text><path d="M 365 789.0 L 430 789.0" fill="none" stroke="#475569" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/><path d="M 660 789.0 L 720 789.0" fill="none" stroke="#475569" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/><path d="M 965 789.0 L 1025 789.0" fill="none" stroke="#475569" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/><path d="M 1310 789.0 L 1380 789.0" fill="none" stroke="#475569" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/><text x="1345.0" y="779.0" text-anchor="middle" font-size="15" font-weight="600" fill="#475569" class="edge-label">결과 저장</text><path d="M 1462.5 538 L 1462 875 L 180 875 L 180.0 905" fill="none" stroke="#475569" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/><text x="821.0" y="865.0" text-anchor="middle" font-size="15" font-weight="600" fill="#475569" class="edge-label">분석 결과 반환</text><path d="M 280 939.0 L 370 939.0" fill="none" stroke="#475569" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/><path d="M 640 939.0 L 730 939.0" fill="none" stroke="#475569" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+  <g transform="translate(1120 910)">
+    <rect x="0" y="0" width="600" height="70" rx="16" fill="#FFFFFF" stroke="#E2E8F0" stroke-width="2"/>
+    <text x="22" y="27" class="legend">색상 구분</text>
+    <circle cx="130" cy="23" r="8" fill="#60A5FA"/><text x="145" y="28" class="legend">iOS</text>
+    <circle cx="215" cy="23" r="8" fill="#A78BFA"/><text x="230" y="28" class="legend">API</text>
+    <circle cx="300" cy="23" r="8" fill="#FB923C"/><text x="315" y="28" class="legend">Lambda</text>
+    <circle cx="405" cy="23" r="8" fill="#34D399"/><text x="420" y="28" class="legend">Storage / DB</text>
+    <circle cx="540" cy="23" r="8" fill="#F87171"/><text x="555" y="28" class="legend">AI</text>
+    <text x="22" y="55" class="legend">원본 이미지 저장과 AI 분석 요청을 분리하여 큰 이미지 처리와 API Key 보안을 함께 해결하는 구조</text>
+  </g>
+</svg>

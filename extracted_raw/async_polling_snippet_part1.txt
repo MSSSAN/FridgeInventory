@@ -1,0 +1,228 @@
+Acknowledged memory concerns, prioritized image quality, prepared async polling implementation
+Yes, parallel upload uses more iPhone memory temporarily (5 images processed at once vs 1 at a time).
+Understood on image quality - async polling is the right choice then.
+Async Polling Implementation Guide
+Backend Changes
+Step 1: Update DynamoDB Schema
+Add status tracking to your table.
+Your messages now need a status field:
+"processing" - AI is thinking
+"completed" - Response ready
+No table changes needed - just add field when writing.
+Step 2: Create Worker Lambda
+This does the actual AI processing.
+Lambda → Create function
+Name: chat-worker
+Runtime: Node.js 20.x
+Timeout: 180 seconds
+Memory: 1024 MB
+Add same IAM permissions as main chat Lambda (DynamoDB, S3, OpenAI)
+Paste this code:
+javascript
+const { DynamoDBClient } = require("@aws-sdk/client-dynamodb");
+const { DynamoDBDocumentClient, PutCommand, QueryCommand, UpdateCommand } = require("@aws-sdk/lib-dynamodb");
+const { S3Client, GetObjectCommand } = require("@aws-sdk/client-s3");
+const dynamoClient = new DynamoDBClient({ region: "ap-southeast-1" });
+const docClient = DynamoDBDocumentClient.from(dynamoClient);
+const s3Client = new S3Client({ region: "ap-southeast-1" });
+const TABLE_NAME = "ChatHistory";
+const BUCKET_NAME = "chat-images-store-bucket";
+const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
+const OPENAI_API_URL = "https://api.openai.com/v1/chat/completions";
+exports.handler = async (event) => {
+    console.log("Worker started:", JSON.stringify(event));
+    try {
+        const { sessionID, userText, imageKeys, requestId, userTimestamp } = event;
+        // Fetch conversation history
+        const historyCommand = new QueryCommand({
+            TableName: TABLE_NAME,
+            KeyConditionExpression: "sessionID = :s",
+            ExpressionAttributeValues: { ":s": sessionID },
+            Limit: 20,
+            ScanIndexForward: true
+        });
+        const historyResult = await docClient.send(historyCommand);
+        const previousMessages = historyResult.Items
+            .filter(item => item.status === "completed")  // Only completed messages
+            .map(item => ({
+                role: item.role,
+                content: item.content
+            }));
+        // Build current message with images from S3
+        let currentContent = [];
+        if (userText) {
+            currentContent.push({ type: "text", text: userText });
+        }
+        if (imageKeys && imageKeys.length > 0) {
+            for (const imageKey of imageKeys) {
+                const imageBase64 = await getImageFromS3(imageKey);
+                currentContent.push({
+                    type: "image_url",
+                    image_url: {
+                        url: `data:image/jpeg;base64,${imageBase64}`
+                    }
+                });
+            }
+        }
+        const currentUserMessage = {
+            role: "user",
+            content: currentContent.length === 1 && currentContent[0].type === "text"
+                ? currentContent[0].text
+                : currentContent
+        };
+        const allMessages = [...previousMessages, currentUserMessage];
+        // Call OpenAI
+        const openaiResponse = await fetch(OPENAI_API_URL, {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+                "Authorization": `Bearer ${OPENAI_API_KEY}`
+            },
+            body: JSON.stringify({
+                model: "gpt-4o-mini",
+                messages: allMessages,
+                max_tokens: 4096
+            })
+        });
+        const openaiData = await openaiResponse.json();
+        if (!openaiResponse.ok) {
+            throw new Error(openaiData.error?.message || "OpenAI API error");
+        }
+        const aiResponseText = openaiData.choices[0].message.content;
+        // Update user message status to completed
+        await docClient.send(new UpdateCommand({
+            TableName: TABLE_NAME,
+            Key: {
+                sessionID: sessionID,
+                timestamp: userTimestamp
+            },
+            UpdateExpression: "SET #status = :completed",
+            ExpressionAttributeNames: {
+                "#status": "status"
+            },
+            ExpressionAttributeValues: {
+                ":completed": "completed"
+            }
+        }));
+        // Save AI response
+        await docClient.send(new PutCommand({
+            TableName: TABLE_NAME,
+            Item: {
+                sessionID: sessionID,
+                timestamp: userTimestamp + 1,
+                role: "assistant",
+                content: aiResponseText,
+                status: "completed"
+            }
+        }));
+        console.log("Worker completed successfully");
+        return { success: true };
+    } catch (error) {
+        console.error("Worker error:", error);
+        // Mark as failed in DynamoDB
+        try {
+            await docClient.send(new UpdateCommand({
+                TableName: TABLE_NAME,
+                Key: {
+                    sessionID: event.sessionID,
+                    timestamp: event.userTimestamp
+                },
+                UpdateExpression: "SET #status = :failed, errorMessage = :msg",
+                ExpressionAttributeNames: {
+                    "#status": "status"
+                },
+                ExpressionAttributeValues: {
+                    ":failed": "failed",
+                    ":msg": error.message
+                }
+            }));
+        } catch (updateError) {
+            console.error("Failed to update error status:", updateError);
+        }
+        throw error;
+    }
+};
+async function getImageFromS3(imageKey) {
+    const command = new GetObjectCommand({
+        Bucket: BUCKET_NAME,
+        Key: imageKey
+    });
+    const response = await s3Client.send(command);
+    const buffer = await streamToBuffer(response.Body);
+    return buffer.toString("base64");
+}
+async function streamToBuffer(stream) {
+    const chunks = [];
+    for await (const chunk of stream) {
+        chunks.push(chunk);
+    }
+    return Buffer.concat(chunks);
+}
+Update: Region (line 6), bucket name (line 10)
+Add environment variable: OPENAI_API_KEY
+Deploy
+Step 3: Update Main Chat Lambda (Dispatcher)
+Replace your current chat Lambda with this:
+javascript
+const { DynamoDBClient } = require("@aws-sdk/client-dynamodb");
+const { DynamoDBDocumentClient, PutCommand } = require("@aws-sdk/lib-dynamodb");
+const { LambdaClient, InvokeCommand } = require("@aws-sdk/client-lambda");
+const dynamoClient = new DynamoDBClient({ region: "ap-southeast-1" });
+const docClient = DynamoDBDocumentClient.from(dynamoClient);
+const lambdaClient = new LambdaClient({ region: "ap-southeast-1" });
+const TABLE_NAME = "ChatHistory";
+const WORKER_LAMBDA_NAME = "chat-worker";
+exports.handler = async (event) => {
+    const headers = {
+        "Access-Control-Allow-Origin": "*",
+        "Access-Control-Allow-Headers": "Content-Type",
+        "Access-Control-Allow-Methods": "POST, OPTIONS",
+        "Content-Type": "application/json"
+    };
+    if (event.httpMethod === "OPTIONS") {
+        return { statusCode: 200, headers, body: "" };
+    }
+    try {
+        const body = JSON.parse(event.body);
+        const { sessionID, userText, imageKeys } = body;
+        console.log("Dispatcher received:", { sessionID, userText, imageKeys });
+        const currentTimestamp = Date.now();
+        // Save user message with "processing" status
+        await docClient.send(new PutCommand({
+            TableName: TABLE_NAME,
+            Item: {
+                sessionID: sessionID,
+                timestamp: currentTimestamp,
+                role: "user",
+                content: userText || "[Image]",
+                imageKeys: imageKeys || [],
+                status: "processing"
+            }
+        }));
+        // Invoke worker Lambda asynchronously
+        const workerPayload = {
+            sessionID: sessionID,
+            userText: userText,
+            imageKeys: imageKeys,
+            requestId: `${sessionID}-${currentTimestamp}`,
+            userTimestamp: currentTimestamp
+        };
+        await lambdaClient.send(new InvokeCommand({
+            FunctionName: WORKER_LAMBDA_NAME,
+            InvocationType: "Event",  // Async invocation
+            Payload: JSON.stringify(workerPayload)
+        }));
+        console.log("Worker invoked, returning immediately");
+        // Return immediately with 202 Accepted
+        return {
+            statusCode: 202,
+            headers: headers,
+            body: JSON.stringify({
+                status: "processing",
+                requestId: `${sessionID}-${currentTimestamp}`,
+                message: "Request accepted, processing..."
+            })
+        };
+    } catch (error) {
+        console.error("Dispatcher error:", error);
+        return {

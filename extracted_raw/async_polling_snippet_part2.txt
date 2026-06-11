@@ -1,0 +1,153 @@
+        return {
+            statusCode: 500,
+            headers: headers,
+            body: JSON.stringify({
+                error: "Internal server error",
+                message: error.message
+            })
+        };
+    }
+};
+Update: Region (line 6), table name (line 10), worker Lambda name (line 11)
+Step 4: Create Status Check Lambda
+Lambda → Create function
+Name: chat-status-check
+Runtime: Node.js 20.x
+Timeout: 10 seconds
+Add DynamoDB read permissions
+Paste this code:
+javascript
+const { DynamoDBClient } = require("@aws-sdk/client-dynamodb");
+const { DynamoDBDocumentClient, QueryCommand } = require("@aws-sdk/lib-dynamodb");
+const dynamoClient = new DynamoDBClient({ region: "ap-southeast-1" });
+const docClient = DynamoDBDocumentClient.from(dynamoClient);
+const TABLE_NAME = "ChatHistory";
+exports.handler = async (event) => {
+    const headers = {
+        "Access-Control-Allow-Origin": "*",
+        "Access-Control-Allow-Headers": "Content-Type",
+        "Access-Control-Allow-Methods": "GET, OPTIONS",
+        "Content-Type": "application/json"
+    };
+    if (event.httpMethod === "OPTIONS") {
+        return { statusCode: 200, headers, body: "" };
+    }
+    try {
+        // Get sessionID and timestamp from query parameters
+        const sessionID = event.queryStringParameters?.sessionID;
+        const timestamp = parseInt(event.queryStringParameters?.timestamp);
+        if (!sessionID || !timestamp) {
+            return {
+                statusCode: 400,
+                headers: headers,
+                body: JSON.stringify({ error: "Missing sessionID or timestamp" })
+            };
+        }
+        // Query for the specific message and the AI response
+        const command = new QueryCommand({
+            TableName: TABLE_NAME,
+            KeyConditionExpression: "sessionID = :s AND #ts >= :t",
+            ExpressionAttributeNames: {
+                "#ts": "timestamp"
+            },
+            ExpressionAttributeValues: {
+                ":s": sessionID,
+                ":t": timestamp
+            },
+            Limit: 2  // User message + AI response
+        });
+        const result = await docClient.send(command);
+        if (result.Items.length === 0) {
+            return {
+                statusCode: 404,
+                headers: headers,
+                body: JSON.stringify({ error: "Message not found" })
+            };
+        }
+        const userMessage = result.Items[0];
+        const aiMessage = result.Items[1];
+        // Check status
+        if (userMessage.status === "processing") {
+            return {
+                statusCode: 200,
+                headers: headers,
+                body: JSON.stringify({
+                    status: "processing",
+                    message: "Still thinking..."
+                })
+            };
+        }
+        if (userMessage.status === "failed") {
+            return {
+                statusCode: 200,
+                headers: headers,
+                body: JSON.stringify({
+                    status: "failed",
+                    error: userMessage.errorMessage || "Processing failed"
+                })
+            };
+        }
+        if (userMessage.status === "completed" && aiMessage) {
+            return {
+                statusCode: 200,
+                headers: headers,
+                body: JSON.stringify({
+                    status: "completed",
+                    response: aiMessage.content
+                })
+            };
+        }
+        // Edge case: completed but no AI response yet
+        return {
+            statusCode: 200,
+            headers: headers,
+            body: JSON.stringify({
+                status: "processing",
+                message: "Finalizing response..."
+            })
+        };
+    } catch (error) {
+        console.error("Status check error:", error);
+        return {
+            statusCode: 500,
+            headers: headers,
+            body: JSON.stringify({
+                error: "Internal server error",
+                message: error.message
+            })
+        };
+    }
+};
+Step 5: Update IAM Permissions
+Main chat Lambda needs permission to invoke worker:
+IAM → Roles → gemini-chat-backend-role-XXXXX
+Add inline policy:
+json
+{
+    "Version": "2012-10-17",
+    "Statement": [
+        {
+            "Effect": "Allow",
+            "Action": "lambda:InvokeFunction",
+            "Resource": "arn:aws:lambda:ap-southeast-1:*:function:chat-worker"
+        }
+    ]
+}
+Replace region with yours.
+Step 6: Add API Gateway Endpoints
+Add status check endpoint:
+API Gateway → Resources → Create Resource
+Name: status
+Path: /status
+Create GET method on /status:
+Integration: Lambda Proxy
+Function: chat-status-check
+Enable CORS on /status
+Deploy API
+Frontend Changes
+Step 7: Update iOS GeminiService
+Replace GeminiService class with this:
+swift
+class GeminiService {
+    static let chatEndpoint = AppConfig.chatEndpoint
+    static let statusEndpoint = "\(AppConfig.backendURL)/status"

@@ -1,0 +1,13 @@
+{
+  "name": "smart-fridge-lambdas",
+  "version": "0.1.0",
+  "type": "module",
+  "private": true,
+  "dependencies": {
+    "@aws-sdk/client-s3": "latest",
+    "@aws-sdk/s3-request-presigner": "latest",
+    "@aws-sdk/client-dynamodb": "latest",
+    "@aws-sdk/lib-dynamodb": "latest",
+    "@aws-sdk/client-lambda": "latest"
+  }
+}

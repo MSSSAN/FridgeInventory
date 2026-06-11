@@ -1,0 +1,137 @@
+            return newID
+        }
+    }
+}
+Step 2: Update Backend URL Configuration
+Find AppConfig struct (around line 19), update:
+swift
+struct AppConfig {
+    static let backendURL = "https://YOUR-API-ID.execute-api.REGION.amazonaws.com/YOUR_STAGE"
+    // Add these endpoints
+    static let chatEndpoint = "\(backendURL)/chat"
+    static let uploadURLEndpoint = "\(backendURL)/upload-url"
+}
+Replace:
+YOUR-API-ID with your actual API ID
+REGION with your region (e.g., ap-southeast-1)
+YOUR_STAGE with your stage name
+Step 3: Create S3 Upload Service
+Add this new struct after GeminiService (around line 180):
+swift
+// MARK: - S3 Upload Service
+struct S3UploadService {
+    struct PresignedURLResponse: Codable {
+        let uploadUrl: String
+        let imageKey: String
+    }
+    // Step 1: Get presigned URL from backend
+    static func getPresignedURL() async throws -> PresignedURLResponse {
+        guard let url = URL(string: AppConfig.uploadURLEndpoint) else {
+            throw URLError(.badURL)
+        }
+        var request = URLRequest(url: url)
+        request.httpMethod = "GET"
+        request.timeoutInterval = 30
+        let (data, response) = try await URLSession.shared.data(for: request)
+        guard let httpResponse = response as? HTTPURLResponse,
+              httpResponse.statusCode == 200 else {
+            throw URLError(.badServerResponse)
+        }
+        return try JSONDecoder().decode(PresignedURLResponse.self, from: data)
+    }
+    // Step 2: Upload image to S3 using presigned URL
+    static func uploadImage(_ image: UIImage, to presignedURL: String) async throws {
+        guard let url = URL(string: presignedURL) else {
+            throw URLError(.badURL)
+        }
+        // Compress image
+        guard let imageData = image.jpegData(compressionQuality: 0.6) else {
+            throw URLError(.cannotDecodeContentData)
+        }
+        var request = URLRequest(url: url)
+        request.httpMethod = "PUT"
+        request.setValue("image/jpeg", forHTTPHeaderField: "Content-Type")
+        request.httpBody = imageData
+        request.timeoutInterval = 60
+        let (_, response) = try await URLSession.shared.data(for: request)
+        guard let httpResponse = response as? HTTPURLResponse,
+              (200...299).contains(httpResponse.statusCode) else {
+            throw URLError(.badServerResponse)
+        }
+    }
+}
+Step 4: Update GeminiService for New Format
+Replace the entire GeminiService struct (around line 89-179) with this:
+swift
+// MARK: - Gemini API Service
+struct GeminiService {
+    static let backendURL = AppConfig.chatEndpoint
+    // New request format for S3/DynamoDB backend
+    struct ChatRequest: Codable {
+        let sessionID: String
+        let userText: String
+        let imageKeys: [String]
+    }
+    // Response format (unchanged)
+    struct GeminiResponse: Codable {
+        struct Candidate: Codable {
+            struct Content: Codable {
+                struct Part: Codable {
+                    let text: String?
+                }
+                let parts: [Part]
+            }
+            let content: Content
+        }
+        let candidates: [Candidate]
+    }
+    // Upload images to S3 and get their keys
+    static func uploadImages(_ images: [UIImage]) async throws -> [String] {
+        var imageKeys: [String] = []
+        for image in images {
+            // Get presigned URL
+            let urlResponse = try await S3UploadService.getPresignedURL()
+            // Upload to S3
+            try await S3UploadService.uploadImage(image, to: urlResponse.uploadUrl)
+            // Store the key
+            imageKeys.append(urlResponse.imageKey)
+        }
+        return imageKeys
+    }
+    // Send message to backend
+    static func sendMessage(text: String, images: [UIImage], conversationHistory: [Message]) async throws -> String {
+        // Step 1: Upload images to S3 if any
+        let imageKeys: [String]
+        if !images.isEmpty {
+            imageKeys = try await uploadImages(images)
+        } else {
+            imageKeys = []
+        }
+        // Step 2: Send chat request
+        guard let url = URL(string: backendURL) else {
+            throw URLError(.badURL)
+        }
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.timeoutInterval = 180
+        // Build request body
+        let chatRequest = ChatRequest(
+            sessionID: AppConfig.sessionID,
+            userText: text,
+            imageKeys: imageKeys
+        )
+        request.httpBody = try JSONEncoder().encode(chatRequest)
+        // Send request
+        let (data, response) = try await URLSession.shared.data(for: request)
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw URLError(.badServerResponse)
+        }
+        if httpResponse.statusCode != 200 {
+            if let errorText = String(data: data, encoding: .utf8) {
+                throw NSError(domain: "ServerError", code: httpResponse.statusCode,
+                            userInfo: [NSLocalizedDescriptionKey: errorText])
+            }
+            throw URLError(.badServerResponse)
+        }
+        // Parse response
