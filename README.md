@@ -1,3 +1,7 @@
+
+
+https://github.com/user-attachments/assets/e4ff4a9a-8b28-4c84-9790-5ccbc195038e
+
 # FridgeInventory
 냉장고 속 식음료에 대한 정보를 편리하게 저장할 수 있는 어플리케이션을 구축함.
 
@@ -27,6 +31,14 @@
 ```
 
 ---
+
+## 어플리케이션 시연 영상
+
+
+https://github.com/user-attachments/assets/e4ff4a9a-8b28-4c84-9790-5ccbc195038e
+
+
+
 
 ## 1. 서비스 개요
 
