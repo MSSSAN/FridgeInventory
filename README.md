@@ -847,42 +847,79 @@ AI API Key는 Lambda의 환경 변수 또는 서버 측 설정에 저장하고, 
 ## 17. 레포 구조
 
 smart-fridge-inventory-repo/
+
 ├── README.md
+
 ├── SETUP.md
+
 ├── .gitignore
+
 ├── .env.example
+
 ├── docs/
+
 │   ├── ARCHITECTURE.md
+
 │   ├── architecture.mmd
+
 │   ├── fridge_inventory_architecture.svg
+
 │   └── fridge_inventory_architecture.png
+
 ├── backend/
+
 │   ├── lambda/
+
 │   │   ├── generate-upload-url/
+
 │   │   │   └── index.mjs
+
 │   │   ├── chat-worker-sync/
+
 │   │   │   └── index.mjs
+
 │   │   ├── chat-dispatcher/
+
 │   │   │   └── index.mjs
+
 │   │   ├── chat-worker-async/
+
 │   │   │   └── index.mjs
+
 │   │   └── chat-status-check/
+
 │   │       └── index.mjs
+
 │   ├── iam/
+
 │   │   ├── dispatcher-invoke-worker-policy.json
+
 │   │   └── lambda-s3-dynamodb-policy.json
+
 │   └── prompts/
+
 │       └── fridge_inventory_system_prompt.md
+
 ├── ios/
+
 │   ├── Services/
+
 │   │   ├── AppConfig.swift
+
 │   │   ├── S3UploadService.swift
+
 │   │   └── FridgeAIService.swift
+
 │   ├── Models/
+
 │   │   └── FoodInventory.swift
+
 │   └── Utils/
+
 │       └── ImageCropper.swift
+
 └── extracted_raw/
+
 
 
 
